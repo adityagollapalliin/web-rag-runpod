@@ -5,6 +5,8 @@ Environment is set before the app is imported so settings pick it up.
 
 import asyncio
 import os
+import shutil
+import tempfile
 from collections.abc import Iterator
 
 TEST_DATABASE = "docqa_test"
@@ -20,15 +22,22 @@ os.environ["DOCQA_ENVIRONMENT"] = "test"
 os.environ["DOCQA_DATABASE_URL"] = _TEST_URL
 os.environ["DOCQA_VALKEY_URL"] = _VALKEY_URL
 os.environ["DOCQA_INVITE_CODE"] = "test-invite"
+os.environ["DOCQA_CELERY_EAGER"] = "true"  # ingestion runs inline, no worker needed
+os.environ["DOCQA_QDRANT_COLLECTION"] = "chunks_test"
+os.environ["DOCQA_EMBEDDING_PROVIDER"] = "fake"
+os.environ["DOCQA_EMBEDDING_DIMENSION"] = "64"
+os.environ["DOCQA_STORAGE_DIR"] = tempfile.mkdtemp(prefix="docqa-test-")
 
 import pytest  # noqa: E402
 import valkey.asyncio as valkey  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
+from qdrant_client import AsyncQdrantClient  # noqa: E402
 from sqlalchemy import text  # noqa: E402
 from sqlalchemy.ext.asyncio import create_async_engine  # noqa: E402
 from sqlalchemy.pool import NullPool  # noqa: E402
 
 import app.models  # noqa: E402, F401
+from app.core.config import get_settings  # noqa: E402
 from app.db.base import Base  # noqa: E402
 from app.main import create_app  # noqa: E402
 
@@ -59,6 +68,11 @@ async def _reset_state() -> None:
     client = valkey.from_url(_VALKEY_URL)  # type: ignore[no-untyped-call]
     await client.flushdb()
     await client.aclose()
+    settings = get_settings()
+    qdrant = AsyncQdrantClient(url=settings.qdrant_url, check_compatibility=False)
+    await qdrant.delete_collection(settings.qdrant_collection)
+    await qdrant.close()
+    shutil.rmtree(settings.storage_dir, ignore_errors=True)
 
 
 @pytest.fixture(scope="session", autouse=True)

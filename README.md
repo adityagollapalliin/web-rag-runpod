@@ -3,7 +3,7 @@
 Self-hosted document question answering: upload documents, ask questions, get answers with
 citations. Built on Qdrant 1.20, FastAPI and React; runs as a single GPU pod on Runpod.
 
-Status: phases 1 and 2 of 7 done (backend skeleton, accounts). See the build phases at the bottom.
+Status: phases 1 to 3 of 7 done (backend skeleton, accounts, ingestion). See the build phases at the bottom.
 
 ## Local development (macOS)
 
@@ -15,6 +15,13 @@ cd backend
 uv sync
 uv run alembic upgrade head
 uv run fastapi dev app/main.py                     # http://127.0.0.1:8000/docs
+```
+
+Ingestion runs in a background worker; start one in a second terminal:
+
+```bash
+cd backend
+uv run celery -A app.workers.celery_app worker --loglevel=info
 ```
 
 Checks:
@@ -42,7 +49,31 @@ Configuration is by `DOCQA_*` environment variables; see `backend/.env.example`.
 - Authenticate with `Authorization: Bearer <access token>` or `X-API-Key: dq_...`.
 - Rate limits: 10 requests a minute per IP on auth endpoints, 120 a minute per user elsewhere.
 
-Tests use a separate `docqa_test` database and Valkey database 15, so they never touch dev data.
+## Documents and ingestion
+
+- `POST /api/documents` (multipart `file`) accepts PDF, `.txt` and `.md` up to 50 MB, stores the
+  file, and returns `202` with status `queued`. The same file twice from one user is a `409`.
+- `GET /api/documents/{id}` reports `queued`, `processing`, `ready` or `failed` (with a reason).
+- `GET /api/documents` lists your documents; `DELETE /api/documents/{id}` removes the row, the
+  file and its vectors.
+
+The worker extracts text per page (`pypdf`), splits it into sentence-aligned chunks of about 2,000
+characters with 200 of overlap, embeds them, and writes them to one Qdrant collection:
+
+- dense vectors compressed with TurboQuant (4 bits per dimension);
+- a full-text index on the chunk text with BM25 scoring, used with the dense vectors for hybrid
+  search (reciprocal rank fusion);
+- `tenant_id` as the tenant key, and every search, count and delete filtered by it, so one user
+  can never reach another's chunks.
+
+Scanned PDFs with no text layer fail with a clear message; OCR is not supported yet.
+
+On a Mac the default embedding model is a fake (`DOCQA_EMBEDDING_PROVIDER=fake`): hashed
+bag-of-words vectors that need no GPU. Set it to `openai` with `DOCQA_EMBEDDING_URL` to use a real
+model served by vLLM. Changing `DOCQA_EMBEDDING_DIMENSION` needs a new collection.
+
+Tests use a separate `docqa_test` database and Valkey database 15 and a `chunks_test`
+collection, and run ingestion inline, so they never touch dev data and need no worker.
 
 ## Build phases
 

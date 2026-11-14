@@ -1,5 +1,6 @@
 from functools import lru_cache
-from typing import Self
+from pathlib import Path
+from typing import Literal, Self
 
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -31,6 +32,22 @@ class Settings(BaseSettings):
     # Header holding the real client IP when behind a proxy you trust (Runpod: CF-Connecting-IP).
     client_ip_header: str = ""
 
+    # Documents and ingestion
+    storage_dir: Path = Path("var/uploads")  # Runpod: /workspace/uploads
+    max_upload_mb: int = 50
+    chunk_max_chars: int = 2000  # roughly 500 tokens
+    chunk_overlap_chars: int = 200
+    qdrant_collection: str = "chunks"
+    # Background jobs. Valkey speaks the Redis protocol, hence the redis:// scheme.
+    celery_broker_url: str = "redis://localhost:56379/1"
+    celery_eager: bool = False  # run jobs inline instead of queueing (tests)
+
+    # Embedding model. "fake" needs no GPU; "openai" calls an OpenAI-style server (vLLM).
+    embedding_provider: Literal["fake", "openai"] = "fake"
+    embedding_url: str = "http://127.0.0.1:8002"
+    embedding_model: str = "Qwen/Qwen3-Embedding-0.6B"
+    embedding_dimension: int = 1024
+
     @property
     def is_prod(self) -> bool:
         return self.environment == "prod"
@@ -39,6 +56,8 @@ class Settings(BaseSettings):
     def _require_real_secret_in_prod(self) -> Self:
         if self.is_prod and self.jwt_secret == DEV_JWT_SECRET:
             raise ValueError("DOCQA_JWT_SECRET must be set in prod")
+        if self.is_prod and self.embedding_provider == "fake":
+            raise ValueError("DOCQA_EMBEDDING_PROVIDER=fake is not allowed in prod")
         if len(self.jwt_secret) < 32:
             raise ValueError("DOCQA_JWT_SECRET must be at least 32 characters")
         return self
