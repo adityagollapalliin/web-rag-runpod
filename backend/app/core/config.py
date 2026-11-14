@@ -48,6 +48,24 @@ class Settings(BaseSettings):
     embedding_model: str = "Qwen/Qwen3-Embedding-0.6B"
     embedding_dimension: int = 1024
 
+    # Text sent before a question when embedding it (some models want an instruction here).
+    embedding_query_prefix: str = ""
+
+    # Reranker and chat model: same "fake" | real split as the embedder.
+    rerank_provider: Literal["fake", "http"] = "fake"
+    rerank_url: str = "http://127.0.0.1:8003"
+    rerank_model: str = "Qwen/Qwen3-Reranker-0.6B"
+    chat_provider: Literal["fake", "openai"] = "fake"
+    chat_url: str = "http://127.0.0.1:8001"
+    chat_model: str = ""
+    chat_max_tokens: int = 800
+
+    # Answering
+    retrieve_limit: int = 30  # candidates fetched from Qdrant before reranking
+    context_chunks: int = 6  # passages given to the chat model
+    answer_cache_seconds: int = 3600
+    ask_rate_limit_per_minute: int = 20  # per user; each ask costs GPU time
+
     @property
     def is_prod(self) -> bool:
         return self.environment == "prod"
@@ -56,8 +74,11 @@ class Settings(BaseSettings):
     def _require_real_secret_in_prod(self) -> Self:
         if self.is_prod and self.jwt_secret == DEV_JWT_SECRET:
             raise ValueError("DOCQA_JWT_SECRET must be set in prod")
-        if self.is_prod and self.embedding_provider == "fake":
-            raise ValueError("DOCQA_EMBEDDING_PROVIDER=fake is not allowed in prod")
+        providers = (self.embedding_provider, self.rerank_provider, self.chat_provider)
+        if self.is_prod and "fake" in providers:
+            raise ValueError("Fake model providers are not allowed in prod")
+        if self.chat_provider == "openai" and not self.chat_model:
+            raise ValueError("DOCQA_CHAT_MODEL must be set when DOCQA_CHAT_PROVIDER=openai")
         if len(self.jwt_secret) < 32:
             raise ValueError("DOCQA_JWT_SECRET must be at least 32 characters")
         return self

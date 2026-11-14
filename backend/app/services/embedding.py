@@ -17,6 +17,8 @@ class Embedder(Protocol):
 
     async def embed(self, texts: list[str]) -> list[list[float]]: ...
 
+    async def aclose(self) -> None: ...
+
 
 class FakeEmbedder:
     """Hashed bag-of-words vectors: no model, but texts sharing words score as similar.
@@ -42,14 +44,26 @@ class FakeEmbedder:
             return vector
         return [value / norm for value in vector]
 
+    async def aclose(self) -> None:
+        return None
+
 
 class OpenAICompatibleEmbedder:
     """Calls an OpenAI-style `/v1/embeddings` endpoint (vLLM on Runpod)."""
 
-    def __init__(self, base_url: str, model: str, dimension: int, timeout: float = 60.0) -> None:
+    def __init__(
+        self,
+        base_url: str,
+        model: str,
+        dimension: int,
+        timeout: float = 60.0,
+        transport: httpx.AsyncBaseTransport | None = None,
+    ) -> None:
         self.dimension = dimension
         self._model = model
-        self._client = httpx.AsyncClient(base_url=base_url.rstrip("/"), timeout=timeout)
+        self._client = httpx.AsyncClient(
+            base_url=base_url.rstrip("/"), timeout=timeout, transport=transport
+        )
 
     async def embed(self, texts: list[str]) -> list[list[float]]:
         response = await self._client.post(
@@ -61,6 +75,9 @@ class OpenAICompatibleEmbedder:
         if len(vectors) != len(texts) or any(len(v) != self.dimension for v in vectors):
             raise RuntimeError("Embedding service returned an unexpected shape")
         return vectors
+
+    async def aclose(self) -> None:
+        await self._client.aclose()
 
 
 def build_embedder(settings: Settings) -> Embedder:

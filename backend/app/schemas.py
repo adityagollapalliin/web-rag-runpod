@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
@@ -60,3 +61,31 @@ class DocumentOut(BaseModel):
     chunk_count: int | None
     created_at: datetime
     updated_at: datetime
+
+
+class AskIn(BaseModel):
+    question: str = Field(min_length=1, max_length=2000)
+    # Omit to start a new conversation; pass an id to ask a follow-up.
+    conversation_id: uuid.UUID | None = None
+
+
+class ConversationOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    title: str
+    created_at: datetime
+
+
+class MessageOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    role: str
+    content: str
+    citations: list[dict[str, Any]]
+    created_at: datetime
+
+
+class ConversationDetailOut(ConversationOut):
+    messages: list[MessageOut]
