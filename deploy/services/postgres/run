@@ -1,18 +1,25 @@
 #!/bin/bash
 . /opt/docqa/lib.sh
-PGDATA="$DATA/postgres"
+PGDATA="$LOCAL/postgres"
+DUMP="$BACKUPS/postgres.dump"
 mkdir -p "$PGDATA" /run/postgresql
 chown -R postgres:postgres "$PGDATA" /run/postgresql
 chmod 700 "$PGDATA"
 
 if [ ! -s "$PGDATA/PG_VERSION" ]; then
-  log "first boot: creating the database cluster in $PGDATA"
+  log "creating the database cluster in $PGDATA"
   # Local connections are trusted: every process in this container is ours, and the
   # port is bound to localhost and never exposed by the pod.
-  s6-setuidgid postgres initdb -D "$PGDATA" --username=postgres --auth=trust --encoding=UTF8 --locale=C.UTF-8
-  s6-setuidgid postgres pg_ctl -D "$PGDATA" -o "-c listen_addresses=''" -w start
-  s6-setuidgid postgres psql -v ON_ERROR_STOP=1 -c "CREATE ROLE docqa LOGIN" -c "CREATE DATABASE docqa OWNER docqa"
-  s6-setuidgid postgres pg_ctl -D "$PGDATA" -m fast -w stop
+  s6-setuidgid postgres initdb -D "$PGDATA" --username=postgres --auth=trust --encoding=UTF8 --locale=C.UTF-8 >/dev/null
+  s6-setuidgid postgres pg_ctl -D "$PGDATA" -o "-c listen_addresses=''" -w start >/dev/null
+  s6-setuidgid postgres psql -q -v ON_ERROR_STOP=1 -c "CREATE ROLE docqa LOGIN" -c "CREATE DATABASE docqa OWNER docqa"
+  if [ -s "$DUMP" ]; then
+    log "restoring the database from $DUMP ($(date -r "$DUMP" -u +%Y-%m-%dT%H:%M:%SZ))"
+    s6-setuidgid postgres pg_restore --exit-on-error --no-owner --role=docqa -d docqa "$DUMP"
+  else
+    log "no backup found: starting with an empty database"
+  fi
+  s6-setuidgid postgres pg_ctl -D "$PGDATA" -m fast -w stop >/dev/null
 fi
 
 exec s6-setuidgid postgres postgres -D "$PGDATA" -c listen_addresses=127.0.0.1 -c port=5432 \

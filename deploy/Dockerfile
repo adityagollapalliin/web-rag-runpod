@@ -68,7 +68,7 @@ COPY backend/app ./app
 COPY --from=web /web/dist /opt/docqa/web
 
 COPY deploy/services/ /opt/docqa/services/
-COPY deploy/lib.sh deploy/start.sh /opt/docqa/
+COPY deploy/lib.sh deploy/start.sh deploy/backup.py /opt/docqa/
 RUN chmod +x /opt/docqa/start.sh /opt/docqa/services/*/run
 
 # Defaults for the pod. Secrets (DOCQA_INVITE_CODE, optionally DOCQA_JWT_SECRET) come from
@@ -96,7 +96,9 @@ ENV PATH="/opt/docqa/venv/bin:/command:${PATH}" \
     DOCQA_CHAT_GPU_FRACTION=0.70 \
     DOCQA_EMBED_GPU_FRACTION=0.08 \
     DOCQA_RERANK_GPU_FRACTION=0.08 \
-    DOCQA_CHAT_MAX_MODEL_LEN=8192
+    DOCQA_CHAT_MAX_MODEL_LEN=8192 \
+    DOCQA_EMBED_ARGS="--max-model-len 4096" \
+    DOCQA_RERANK_ARGS="--max-model-len 4096"
 # Qwen3 specifics: the embedder wants an instruction before a query, and the chat model
 # answers faster and more plainly with its thinking mode off.
 ENV DOCQA_EMBEDDING_QUERY_PREFIX="Instruct: Given a question, retrieve passages that answer it\nQuery: " \
