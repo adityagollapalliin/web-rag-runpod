@@ -3,7 +3,7 @@
 Self-hosted document question answering: upload documents, ask questions, get answers with
 citations. Built on Qdrant 1.20, FastAPI and React; runs as a single GPU pod on Runpod.
 
-Status: phases 1 to 3 of 7 done (backend skeleton, accounts, ingestion). See the build phases at the bottom.
+Status: phases 1 to 4 of 7 done (backend skeleton, accounts, ingestion, asking). See the build phases at the bottom.
 
 ## Local development (macOS)
 
@@ -71,6 +71,31 @@ Scanned PDFs with no text layer fail with a clear message; OCR is not supported 
 On a Mac the default embedding model is a fake (`DOCQA_EMBEDDING_PROVIDER=fake`): hashed
 bag-of-words vectors that need no GPU. Set it to `openai` with `DOCQA_EMBEDDING_URL` to use a real
 model served by vLLM. Changing `DOCQA_EMBEDDING_DIMENSION` needs a new collection.
+
+## Asking questions
+
+`POST /api/ask` with `{"question": "...", "conversation_id": "<optional>"}` answers from your own
+documents and streams the reply as server-sent events:
+
+1. `sources`: the numbered passages the answer is written from (file, pages, snippet, score).
+2. `token`: a piece of answer text, repeated as the model writes.
+3. `done`: the conversation and message ids, and whether the answer came from cache. An `error`
+   event takes its place if answering fails.
+
+Behind it: the question is embedded, Qdrant returns up to 30 candidates by hybrid search within
+your tenant, a reranker re-scores them, and the top 6 go to the chat model with instructions to
+cite them as `[1]`, `[2]`. When nothing matches, the reply says so without calling the model.
+
+Valkey caches two things: question embeddings for a day, and whole answers for an hour. The answer
+cache is per user and keyed on a corpus version that changes on every upload or delete, so a
+cached answer is never served after your documents change. Follow-up questions are not cached.
+
+`GET /api/conversations`, `GET /api/conversations/{id}` and `DELETE /api/conversations/{id}` give
+access to saved chats, each answer stored with its sources. Asking is limited to 20 a minute per
+user.
+
+Like the embedder, the reranker and chat model default to fakes on a Mac (the fake chat model
+quotes the top source). The real clients speak to vLLM: `/v1/rerank` and `/v1/chat/completions`.
 
 Tests use a separate `docqa_test` database and Valkey database 15 and a `chunks_test`
 collection, and run ingestion inline, so they never touch dev data and need no worker.

@@ -76,8 +76,12 @@ async def run_ingestion(document_id: uuid.UUID) -> None:
     cache = valkey.from_url(settings.valkey_url)  # type: ignore[no-untyped-call]
     try:
         store = VectorStore(qdrant, settings.qdrant_collection, settings.embedding_dimension)
-        async with async_sessionmaker(engine, expire_on_commit=False)() as session:
-            user_id = await _ingest(session, store, build_embedder(settings), document_id)
+        embedder = build_embedder(settings)
+        try:
+            async with async_sessionmaker(engine, expire_on_commit=False)() as session:
+                user_id = await _ingest(session, store, embedder, document_id)
+        finally:
+            await embedder.aclose()
         if user_id is not None:
             await cache.incr(corpus_version_key(user_id))
     finally:

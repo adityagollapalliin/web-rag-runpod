@@ -6,8 +6,11 @@ from fastapi import FastAPI
 from qdrant_client import AsyncQdrantClient
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from app.api import api_keys, auth, documents, health
+from app.api import api_keys, ask, auth, documents, health
 from app.core.config import get_settings
+from app.services.chat import build_chat_model
+from app.services.embedding import build_embedder
+from app.services.rerank import build_reranker
 from app.services.vector_store import VectorStore
 
 
@@ -25,9 +28,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.vector_store = VectorStore(
         app.state.qdrant, settings.qdrant_collection, settings.embedding_dimension
     )
+    app.state.embedder = build_embedder(settings)
+    app.state.reranker = build_reranker(settings)
+    app.state.chat_model = build_chat_model(settings)
     try:
         yield
     finally:
+        await app.state.chat_model.aclose()
+        await app.state.reranker.aclose()
+        await app.state.embedder.aclose()
         await app.state.qdrant.close()
         await app.state.valkey.aclose()
         await engine.dispose()
@@ -40,6 +49,7 @@ def create_app() -> FastAPI:
     app.include_router(auth.me_router)
     app.include_router(api_keys.router)
     app.include_router(documents.router)
+    app.include_router(ask.router)
     return app
 
 

@@ -35,7 +35,7 @@ def client_ip(request: Request) -> str:
     return request.client.host if request.client else "unknown"
 
 
-def _too_many_requests() -> HTTPException:
+def too_many_requests() -> HTTPException:
     return HTTPException(
         status.HTTP_429_TOO_MANY_REQUESTS, "Too many requests", headers={"Retry-After": "60"}
     )
@@ -47,7 +47,7 @@ def ip_rate_limit(scope: str) -> Callable[[Request, Valkey], Awaitable[None]]:
     async def dependency(request: Request, valkey: ValkeyDep) -> None:
         limit = get_settings().auth_rate_limit_per_minute
         if not await ratelimit.allow(valkey, f"{scope}:{client_ip(request)}", limit):
-            raise _too_many_requests()
+            raise too_many_requests()
 
     return dependency
 
@@ -94,7 +94,7 @@ async def current_user(
         )
     limit = get_settings().api_rate_limit_per_minute
     if not await ratelimit.allow(valkey, f"user:{user.id}", limit):
-        raise _too_many_requests()
+        raise too_many_requests()
     return user
 
 
