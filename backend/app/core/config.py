@@ -66,6 +66,9 @@ class Settings(BaseSettings):
     answer_cache_seconds: int = 3600
     ask_rate_limit_per_minute: int = 20  # per user; each ask costs GPU time
 
+    # Folder with the built web app (frontend/dist). Unset in development, where Vite serves it.
+    static_dir: Path | None = None
+
     @property
     def is_prod(self) -> bool:
         return self.environment == "prod"

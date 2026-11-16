@@ -3,7 +3,7 @@
 Self-hosted document question answering: upload documents, ask questions, get answers with
 citations. Built on Qdrant 1.20, FastAPI and React; runs as a single GPU pod on Runpod.
 
-Status: phases 1 to 4 of 7 done (backend skeleton, accounts, ingestion, asking). See the build phases at the bottom.
+Status: phases 1 to 5 of 7 done (backend, accounts, ingestion, asking, web app). See the build phases at the bottom.
 
 ## Local development (macOS)
 
@@ -37,6 +37,35 @@ uv run mypy app tests
 - `GET /readyz`: Postgres, Valkey and Qdrant all answer (503 otherwise).
 
 Configuration is by `DOCQA_*` environment variables; see `backend/.env.example`.
+
+## Web app
+
+React 19, Vite, TypeScript, TanStack Query and Tailwind, in `frontend/`. Needs Node 22 and pnpm.
+
+```bash
+cd frontend
+pnpm install
+pnpm dev          # http://localhost:5173, forwards /api to FastAPI on port 8000
+```
+
+Run the API with `DOCQA_INVITE_CODE=<something>` set so you can create an account, and keep a
+worker running so uploads get processed.
+
+To run it the way Runpod will, as one server on one port:
+
+```bash
+cd frontend && pnpm run build
+cd ../backend && DOCQA_STATIC_DIR=../frontend/dist uv run fastapi run app/main.py
+```
+
+- **Chat**: answers stream in as they are written; `[1]`-style markers open the matching source.
+- **Documents**: drag-and-drop upload with progress, live ingestion status, delete.
+- **API keys**: create (shown once), list, revoke.
+
+The access token is kept in memory only; the refresh token is an httpOnly cookie, so reloading the
+page signs you back in without scripts ever seeing a long-lived credential.
+
+Checks: `pnpm run lint`, `pnpm run test`, `pnpm run build`.
 
 ## Accounts and API access
 
