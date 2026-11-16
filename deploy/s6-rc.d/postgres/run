@@ -1,0 +1,19 @@
+#!/command/with-contenv bash
+. /opt/docqa/lib.sh
+PGDATA="$DATA/postgres"
+mkdir -p "$PGDATA" /run/postgresql
+chown -R postgres:postgres "$PGDATA" /run/postgresql
+chmod 700 "$PGDATA"
+
+if [ ! -s "$PGDATA/PG_VERSION" ]; then
+  log "first boot: creating the database cluster in $PGDATA"
+  # Local connections are trusted: every process in this container is ours, and the
+  # port is bound to localhost and never exposed by the pod.
+  s6-setuidgid postgres initdb -D "$PGDATA" --username=postgres --auth=trust --encoding=UTF8 --locale=C.UTF-8
+  s6-setuidgid postgres pg_ctl -D "$PGDATA" -o "-c listen_addresses=''" -w start
+  s6-setuidgid postgres psql -v ON_ERROR_STOP=1 -c "CREATE ROLE docqa LOGIN" -c "CREATE DATABASE docqa OWNER docqa"
+  s6-setuidgid postgres pg_ctl -D "$PGDATA" -m fast -w stop
+fi
+
+exec s6-setuidgid postgres postgres -D "$PGDATA" -c listen_addresses=127.0.0.1 -c port=5432 \
+  -c unix_socket_directories=/run/postgresql -c shared_buffers=256MB -c logging_collector=off

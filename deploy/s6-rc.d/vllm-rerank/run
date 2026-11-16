@@ -1,0 +1,13 @@
+#!/command/with-contenv bash
+. /opt/docqa/lib.sh
+models_enabled || idle_forever "models are off (DOCQA_MODELS=$DOCQA_MODELS)"
+mkdir -p "$HF_HOME"
+# One model loads at a time, so each sees an accurate picture of free GPU memory.
+wait_for "embedding model" http_ok http://127.0.0.1:8002/health
+# The Qwen3 reranker is a generative model scored on its yes/no answer; vLLM needs
+# these overrides to serve it as a cross-encoder (see vLLM docs, "Scoring").
+OVERRIDES='{"architectures": ["Qwen3ForSequenceClassification"], "classifier_from_token": ["no", "yes"], "is_original_qwen3_reranker": true}'
+# shellcheck disable=SC2086
+exec vllm serve "$DOCQA_RERANK_MODEL" --host 127.0.0.1 --port 8003 \
+  --gpu-memory-utilization "$DOCQA_RERANK_GPU_FRACTION" \
+  --hf_overrides "${DOCQA_RERANK_HF_OVERRIDES:-$OVERRIDES}" ${DOCQA_RERANK_ARGS:-}

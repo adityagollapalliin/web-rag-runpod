@@ -1,0 +1,10 @@
+#!/command/with-contenv bash
+. /opt/docqa/lib.sh
+# s6-setuidgid switches user but keeps HOME; libraries that read ~ must not land in /root.
+export HOME=/home/docqa
+export DOCQA_STORAGE_DIR="${DOCQA_STORAGE_DIR:-$DATA/uploads}"
+load_jwt_secret
+# The API applies migrations before it starts listening, so wait for it.
+wait_for api http_ok http://127.0.0.1:8000/healthz
+cd /opt/docqa/backend
+exec s6-setuidgid docqa celery -A app.workers.celery_app worker --loglevel=info --concurrency=2

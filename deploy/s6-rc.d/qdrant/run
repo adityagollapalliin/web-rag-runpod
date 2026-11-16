@@ -1,0 +1,12 @@
+#!/command/with-contenv bash
+. /opt/docqa/lib.sh
+mkdir -p "$DATA/qdrant/storage" "$DATA/qdrant/snapshots"
+chown -R docqa:docqa "$DATA/qdrant"
+cd "$DATA/qdrant"
+export QDRANT__SERVICE__HOST=127.0.0.1
+export QDRANT__SERVICE__HTTP_PORT=6333
+export QDRANT__SERVICE__GRPC_PORT=6334
+export QDRANT__STORAGE__STORAGE_PATH="$DATA/qdrant/storage"
+export QDRANT__STORAGE__SNAPSHOTS_PATH="$DATA/qdrant/snapshots"
+export QDRANT__TELEMETRY_DISABLED=true
+exec s6-setuidgid docqa qdrant

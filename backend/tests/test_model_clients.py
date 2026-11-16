@@ -67,9 +67,11 @@ async def test_chat_model_parses_the_event_stream() -> None:
         body = json.loads(request.content)
         assert request.url.path == "/v1/chat/completions"
         assert body["stream"] is True and body["model"] == "c" and body["max_tokens"] == 50
+        assert body["chat_template_kwargs"] == {"enable_thinking": False}
         return httpx.Response(200, content=stream, headers={"content-type": "text/event-stream"})
 
-    model = OpenAIChatModel("http://x", "c", 50, transport=_transport(handler))
+    extra = {"chat_template_kwargs": {"enable_thinking": False}}
+    model = OpenAIChatModel("http://x", "c", 50, extra, transport=_transport(handler))
     parts = [text async for text in model.stream([{"role": "user", "content": "hi"}])]
     assert parts == ["Hello", " world"]
 
@@ -96,3 +98,17 @@ def test_prod_settings_reject_fake_models_and_missing_chat_model() -> None:
         chat_provider="openai",
         chat_model="some/model",
     )
+
+
+def test_chat_extra_body_is_read_from_json_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv(
+        "DOCQA_CHAT_EXTRA_BODY", '{"chat_template_kwargs": {"enable_thinking": false}}'
+    )
+    assert Settings().chat_extra_body == {"chat_template_kwargs": {"enable_thinking": False}}
+
+
+def test_query_prefix_turns_escaped_newline_into_a_real_one(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("DOCQA_EMBEDDING_QUERY_PREFIX", r"Instruct: find passages\nQuery: ")
+    assert Settings().embedding_query_prefix == "Instruct: find passages\nQuery: "

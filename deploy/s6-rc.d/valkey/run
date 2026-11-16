@@ -1,0 +1,7 @@
+#!/command/with-contenv bash
+. /opt/docqa/lib.sh
+mkdir -p "$DATA/valkey"
+chown -R docqa:docqa "$DATA/valkey"
+# Append-only file on the volume, so queued ingestion jobs survive a pod restart.
+exec s6-setuidgid docqa valkey-server --bind 127.0.0.1 --port 6379 --dir "$DATA/valkey" \
+  --appendonly yes --save "" --maxmemory 512mb --maxmemory-policy noeviction

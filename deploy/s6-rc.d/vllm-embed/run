@@ -1,0 +1,7 @@
+#!/command/with-contenv bash
+. /opt/docqa/lib.sh
+models_enabled || idle_forever "models are off (DOCQA_MODELS=$DOCQA_MODELS)"
+mkdir -p "$HF_HOME"
+# shellcheck disable=SC2086
+exec vllm serve "$DOCQA_EMBEDDING_MODEL" --host 127.0.0.1 --port 8002 \
+  --gpu-memory-utilization "$DOCQA_EMBED_GPU_FRACTION" ${DOCQA_EMBED_ARGS:-}

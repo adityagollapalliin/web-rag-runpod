@@ -34,3 +34,17 @@ def test_readyz_reports_unreachable_service(monkeypatch: pytest.MonkeyPatch) -> 
     body = response.json()
     assert body["status"] == "unavailable"
     assert all(value.startswith("error") for value in body["checks"].values())
+
+
+def test_readyz_checks_model_servers_only_when_real_ones_are_configured(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    assert "chat_model" not in client.get("/readyz").json()["checks"]
+
+    monkeypatch.setattr(get_settings(), "chat_provider", "openai")
+    monkeypatch.setattr(get_settings(), "chat_url", "http://127.0.0.1:1")
+    response = client.get("/readyz")
+    assert response.status_code == 503
+    checks = response.json()["checks"]
+    assert checks["chat_model"].startswith("error") and checks["postgres"] == "ok"
+    assert "embedding_model" not in checks
