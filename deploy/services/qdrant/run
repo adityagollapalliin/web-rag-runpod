@@ -1,0 +1,23 @@
+#!/bin/bash
+. /opt/docqa/lib.sh
+STORAGE="$LOCAL/qdrant/storage"
+mkdir -p "$STORAGE" "$LOCAL/qdrant/snapshots" "$BACKUPS/qdrant"
+chown -R docqa:docqa "$LOCAL/qdrant"
+cd "$LOCAL/qdrant"
+export QDRANT__SERVICE__HOST=127.0.0.1
+export QDRANT__SERVICE__HTTP_PORT=6333
+export QDRANT__SERVICE__GRPC_PORT=6334
+export QDRANT__STORAGE__STORAGE_PATH="$STORAGE"
+export QDRANT__STORAGE__SNAPSHOTS_PATH="$LOCAL/qdrant/snapshots"
+export QDRANT__TELEMETRY_DISABLED=true
+
+# Empty local storage (a fresh container): recover each collection from its last snapshot.
+args=()
+if [ -z "$(ls -A "$STORAGE/collections" 2>/dev/null)" ]; then
+  for snapshot in "$BACKUPS"/qdrant/*.snapshot; do
+    [ -s "$snapshot" ] || continue
+    log "restoring collection $(basename "$snapshot" .snapshot) from its snapshot"
+    args+=(--snapshot "$snapshot:$(basename "$snapshot" .snapshot)")
+  done
+fi
+exec s6-setuidgid docqa qdrant "${args[@]}"

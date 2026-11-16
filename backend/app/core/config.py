@@ -1,8 +1,8 @@
 from functools import lru_cache
 from pathlib import Path
-from typing import Literal, Self
+from typing import Any, Literal, Self
 
-from pydantic import model_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 DEV_JWT_SECRET = "dev-only-secret-change-me-dev-only-secret-change-me"  # noqa: S105
@@ -59,6 +59,9 @@ class Settings(BaseSettings):
     chat_url: str = "http://127.0.0.1:8001"
     chat_model: str = ""
     chat_max_tokens: int = 800
+    # Extra fields merged into every chat request, as JSON (for example to switch off a
+    # model's thinking mode: {"chat_template_kwargs": {"enable_thinking": false}}).
+    chat_extra_body: dict[str, Any] = {}
 
     # Answering
     retrieve_limit: int = 30  # candidates fetched from Qdrant before reranking
@@ -68,6 +71,12 @@ class Settings(BaseSettings):
 
     # Folder with the built web app (frontend/dist). Unset in development, where Vite serves it.
     static_dir: Path | None = None
+
+    @field_validator("embedding_query_prefix")
+    @classmethod
+    def _unescape_newlines(cls, value: str) -> str:
+        # Environment files and Dockerfiles cannot hold a real newline, so "\\n" stands for one.
+        return value.replace("\\n", "\n")
 
     @property
     def is_prod(self) -> bool:

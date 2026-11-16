@@ -3,7 +3,7 @@
 import json
 import re
 from collections.abc import AsyncIterator
-from typing import Protocol
+from typing import Any, Protocol
 
 import httpx
 
@@ -43,11 +43,13 @@ class OpenAIChatModel:
         base_url: str,
         model: str,
         max_tokens: int,
+        extra_body: dict[str, Any] | None = None,
         timeout: float = 120.0,
         transport: httpx.AsyncBaseTransport | None = None,
     ) -> None:
         self._model = model
         self._max_tokens = max_tokens
+        self._extra_body = extra_body or {}
         self._client = httpx.AsyncClient(
             base_url=base_url.rstrip("/"), timeout=timeout, transport=transport
         )
@@ -59,6 +61,7 @@ class OpenAIChatModel:
             "stream": True,
             "max_tokens": self._max_tokens,
             "temperature": 0.2,
+            **self._extra_body,
         }
         async with self._client.stream("POST", "/v1/chat/completions", json=body) as response:
             response.raise_for_status()
@@ -79,4 +82,6 @@ class OpenAIChatModel:
 def build_chat_model(settings: Settings) -> ChatModel:
     if settings.chat_provider == "fake":
         return FakeChatModel()
-    return OpenAIChatModel(settings.chat_url, settings.chat_model, settings.chat_max_tokens)
+    return OpenAIChatModel(
+        settings.chat_url, settings.chat_model, settings.chat_max_tokens, settings.chat_extra_body
+    )

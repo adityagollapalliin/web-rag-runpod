@@ -1,0 +1,20 @@
+#!/bin/bash
+. /opt/docqa/lib.sh
+# s6-setuidgid switches user but keeps HOME; libraries that read ~ must not land in /root.
+export HOME=/home/docqa
+export DOCQA_STORAGE_DIR="${DOCQA_STORAGE_DIR:-$DATA/uploads}"
+mkdir -p "$DOCQA_STORAGE_DIR"
+own docqa "$DATA" 2>/dev/null
+load_jwt_secret
+
+wait_for postgres pg_isready -h 127.0.0.1 -p 5432 -d docqa -U docqa
+wait_for valkey valkey-cli -h 127.0.0.1 ping
+wait_for qdrant http_ok http://127.0.0.1:6333/readyz
+
+cd /opt/docqa/backend
+log "applying database migrations"
+s6-setuidgid docqa alembic upgrade head
+# After a restore the database can be newer than the vector snapshot; re-queue what is missing.
+s6-setuidgid docqa python -m app.reconcile || log "reconcile failed; continuing"
+# One process: the event loop handles many concurrent streams, and model calls are remote.
+exec s6-setuidgid docqa uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers --forwarded-allow-ips='*'

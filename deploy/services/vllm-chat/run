@@ -1,0 +1,9 @@
+#!/bin/bash
+. /opt/docqa/lib.sh
+models_enabled || idle_forever "models are off (DOCQA_MODELS=$DOCQA_MODELS)"
+mkdir -p "$HF_HOME"
+wait_for "rerank model" http_ok http://127.0.0.1:8003/health
+# shellcheck disable=SC2086
+exec vllm serve "$DOCQA_CHAT_MODEL" --host 127.0.0.1 --port 8001 \
+  --gpu-memory-utilization "$DOCQA_CHAT_GPU_FRACTION" \
+  --max-model-len "$DOCQA_CHAT_MAX_MODEL_LEN" ${DOCQA_CHAT_ARGS:-}

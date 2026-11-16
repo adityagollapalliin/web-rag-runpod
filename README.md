@@ -3,7 +3,8 @@
 Self-hosted document question answering: upload documents, ask questions, get answers with
 citations. Built on Qdrant 1.20, FastAPI and React; runs as a single GPU pod on Runpod.
 
-Status: phases 1 to 5 of 7 done (backend, accounts, ingestion, asking, web app). See the build phases at the bottom.
+Status: phases 1 to 6 of 7 done. The app has run end to end on a Runpod A40 with real models.
+See [deploy/README.md](deploy/README.md) for how the single-container image works. See the build phases at the bottom.
 
 ## Local development (macOS)
 

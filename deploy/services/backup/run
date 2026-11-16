@@ -1,0 +1,18 @@
+#!/bin/bash
+. /opt/docqa/lib.sh
+export HOME=/home/docqa
+mkdir -p "$BACKUPS/qdrant"
+own docqa "$BACKUPS"
+# Back up only once the app is serving, so a restore in progress is never overwritten.
+wait_for api http_ok http://127.0.0.1:8000/healthz
+INTERVAL="${DOCQA_BACKUP_INTERVAL_SECONDS:-120}"
+log "backing up to $BACKUPS every ${INTERVAL}s"
+
+run_backup() { s6-setuidgid docqa python /opt/docqa/backup.py "$BACKUPS" "$LOCAL/qdrant/snapshots" || log "backup failed"; }
+# A stop request gets one last backup before this service exits.
+trap 'log "stopping: final backup"; run_backup; exit 0' TERM INT
+while true; do
+  run_backup
+  sleep "$INTERVAL" &
+  wait $!
+done
