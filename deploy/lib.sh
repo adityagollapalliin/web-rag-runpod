@@ -5,7 +5,7 @@ set -euo pipefail
 DATA="${DOCQA_DATA_DIR:-/workspace/docqa}"
 export HF_HOME="${HF_HOME:-$DATA/huggingface}"
 
-# s6 starts each run script inside its own service directory, which gives the service name.
+# s6-supervise starts each run script inside its own service directory, which gives the service name.
 SERVICE="$(basename "$PWD")"
 log() { echo "[$SERVICE] $*"; }
 

@@ -1,8 +1,13 @@
 # Running on Runpod
 
 A Runpod pod is one container, so Docker Compose is not available. This image runs every
-service in that one container under [s6-overlay](https://github.com/just-containers/s6-overlay),
-which starts them and restarts any that exit.
+service in that one container under `s6-svscan` from [s6](https://skarnet.org/software/s6/),
+which starts them and restarts any that exit. Each service is a folder in `deploy/services/`
+with a `run` script.
+
+s6-overlay's `/init` is deliberately not the entrypoint: it must be process 1, and Runpod starts
+containers under its own init, so it exits at once there. `docker run --init` reproduces that
+locally, which is why the smoke test below uses it.
 
 | Service | Port (localhost only, except the API) | Runs as |
 |---|---|---|
@@ -82,7 +87,7 @@ and web app:
 
 ```bash
 docker build -f deploy/Dockerfile --build-arg BASE_IMAGE=ubuntu:24.04 -t docqa:smoke .
-docker run --rm -p 8000:8000 -v docqa-smoke:/workspace \
+docker run --rm --init -p 8000:8000 -v docqa-smoke:/workspace \
   -e DOCQA_MODELS=off -e DOCQA_ENVIRONMENT=dev \
   -e DOCQA_EMBEDDING_PROVIDER=fake -e DOCQA_RERANK_PROVIDER=fake -e DOCQA_CHAT_PROVIDER=fake \
   -e DOCQA_INVITE_CODE=local-invite docqa:smoke

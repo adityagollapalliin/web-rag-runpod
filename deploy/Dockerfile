@@ -1,5 +1,5 @@
 # One image holding every service, because a Runpod pod is a single container
-# (no Docker Compose). s6-overlay supervises the processes.
+# (no Docker Compose). The s6 supervisor (s6-svscan) starts and restarts the processes.
 #
 # Build from the repository root:  docker build -f deploy/Dockerfile .
 # For a GPU-less smoke test, pass --build-arg BASE_IMAGE=ubuntu:24.04 and run with DOCQA_MODELS=off.
@@ -41,7 +41,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
     && rm -rf /var/lib/apt/lists/*
 ENV PATH="/usr/lib/postgresql/${POSTGRES_MAJOR}/bin:${PATH}"
 
-# Qdrant (static musl build) and s6-overlay, for the image's CPU architecture.
+# Qdrant (static musl build) and the s6 tools (taken from the s6-overlay release), for the
+# image's CPU architecture.
 RUN case "${TARGETARCH}" in amd64) arch=x86_64 ;; arm64) arch=aarch64 ;; *) echo "unsupported: ${TARGETARCH}"; exit 1 ;; esac \
     && curl -fsSL "https://github.com/qdrant/qdrant/releases/download/${QDRANT_VERSION}/qdrant-${arch}-unknown-linux-musl.tar.gz" \
        | tar xz -C /usr/local/bin qdrant \
@@ -66,16 +67,13 @@ COPY backend/alembic ./alembic
 COPY backend/app ./app
 COPY --from=web /web/dist /opt/docqa/web
 
-COPY deploy/s6-rc.d/ /etc/s6-overlay/s6-rc.d/
-COPY deploy/lib.sh /opt/docqa/lib.sh
-RUN chmod +x /etc/s6-overlay/s6-rc.d/*/run
+COPY deploy/services/ /opt/docqa/services/
+COPY deploy/lib.sh deploy/start.sh /opt/docqa/
+RUN chmod +x /opt/docqa/start.sh /opt/docqa/services/*/run
 
 # Defaults for the pod. Secrets (DOCQA_INVITE_CODE, optionally DOCQA_JWT_SECRET) come from
 # the pod's environment; everything here can be overridden the same way.
-ENV S6_KEEP_ENV=1 \
-    S6_BEHAVIOUR_IF_STAGE2_FAILS=2 \
-    S6_CMD_WAIT_FOR_SERVICES_MAXTIME=0 \
-    PATH="/opt/docqa/venv/bin:${PATH}" \
+ENV PATH="/opt/docqa/venv/bin:/command:${PATH}" \
     DOCQA_DATA_DIR=/workspace/docqa \
     DOCQA_MODELS=on \
     DOCQA_ENVIRONMENT=prod \
@@ -105,4 +103,4 @@ ENV DOCQA_EMBEDDING_QUERY_PREFIX="Instruct: Given a question, retrieve passages 
     DOCQA_CHAT_EXTRA_BODY='{"chat_template_kwargs": {"enable_thinking": false}}'
 
 EXPOSE 8000
-ENTRYPOINT ["/init"]
+ENTRYPOINT ["/opt/docqa/start.sh"]

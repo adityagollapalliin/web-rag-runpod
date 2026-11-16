@@ -1,4 +1,4 @@
-#!/command/with-contenv bash
+#!/bin/bash
 . /opt/docqa/lib.sh
 mkdir -p "$DATA/valkey"
 chown -R docqa:docqa "$DATA/valkey"

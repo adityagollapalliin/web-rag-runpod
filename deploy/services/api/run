@@ -1,4 +1,4 @@
-#!/command/with-contenv bash
+#!/bin/bash
 . /opt/docqa/lib.sh
 # s6-setuidgid switches user but keeps HOME; libraries that read ~ must not land in /root.
 export HOME=/home/docqa

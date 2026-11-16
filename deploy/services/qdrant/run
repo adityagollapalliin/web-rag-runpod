@@ -1,4 +1,4 @@
-#!/command/with-contenv bash
+#!/bin/bash
 . /opt/docqa/lib.sh
 mkdir -p "$DATA/qdrant/storage" "$DATA/qdrant/snapshots"
 chown -R docqa:docqa "$DATA/qdrant"

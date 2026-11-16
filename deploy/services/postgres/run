@@ -1,4 +1,4 @@
-#!/command/with-contenv bash
+#!/bin/bash
 . /opt/docqa/lib.sh
 PGDATA="$DATA/postgres"
 mkdir -p "$PGDATA" /run/postgresql
