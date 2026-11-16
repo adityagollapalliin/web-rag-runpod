@@ -7,6 +7,7 @@ from qdrant_client import AsyncQdrantClient
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.api import api_keys, ask, auth, documents, health
+from app.api.frontend import mount_frontend
 from app.core.config import get_settings
 from app.services.chat import build_chat_model
 from app.services.embedding import build_embedder
@@ -50,6 +51,9 @@ def create_app() -> FastAPI:
     app.include_router(api_keys.router)
     app.include_router(documents.router)
     app.include_router(ask.router)
+    static_dir = get_settings().static_dir
+    if static_dir is not None:
+        mount_frontend(app, static_dir)
     return app
 
 

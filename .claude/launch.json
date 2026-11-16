@@ -1,0 +1,14 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "docqa",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "cd backend && DOCQA_STATIC_DIR=../frontend/dist DOCQA_INVITE_CODE=local-invite uv run fastapi run app/main.py --port 8000"
+      ],
+      "port": 8000
+    }
+  ]
+}
