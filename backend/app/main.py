@@ -11,8 +11,9 @@ from app.api.frontend import mount_frontend
 from app.core.config import get_settings
 from app.services.chat import build_chat_model
 from app.services.embedding import build_embedder
+from app.services.multivector import build_multivector_embedder
 from app.services.rerank import build_reranker
-from app.services.vector_store import VectorStore
+from app.services.vector_store import build_vector_store
 
 
 @asynccontextmanager
@@ -26,9 +27,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     )
     # No version probe at startup: /readyz is what reports whether Qdrant is reachable.
     app.state.qdrant = AsyncQdrantClient(url=settings.qdrant_url, check_compatibility=False)
-    app.state.vector_store = VectorStore(
-        app.state.qdrant, settings.qdrant_collection, settings.embedding_dimension
-    )
+    app.state.vector_store = build_vector_store(app.state.qdrant, settings)
+    app.state.multivector_embedder = build_multivector_embedder(settings)
     app.state.embedder = build_embedder(settings)
     app.state.reranker = build_reranker(settings)
     app.state.chat_model = build_chat_model(settings)
@@ -36,6 +36,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         yield
     finally:
         await app.state.chat_model.aclose()
+        if app.state.multivector_embedder is not None:
+            await app.state.multivector_embedder.aclose()
         await app.state.reranker.aclose()
         await app.state.embedder.aclose()
         await app.state.qdrant.close()

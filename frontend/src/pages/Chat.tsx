@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Fragment, useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
+import { Fragment, useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
-import { api, ask, type Conversation, type ConversationDetail, type Source } from '../api/client'
+import { api, ask, type Conversation, type ConversationDetail, type Message, type Source } from '../api/client'
 
 /** The exchange currently being streamed, shown until it is saved and reloaded. */
 interface Pending {
@@ -19,8 +19,52 @@ function pages(source: Source): string {
     : `pages ${source.page_start}–${source.page_end}`
 }
 
+/** Helpful / Not helpful buttons for a saved answer. Clicking the active one clears it. */
+function Rating({ message, conversationId }: { message: Message; conversationId: string }) {
+  const queryClient = useQueryClient()
+  const rate = useMutation({
+    mutationFn: (rating: number) =>
+      api<Message>(`/api/messages/${message.id}/rating`, { method: 'PUT', body: { rating } }),
+    onSuccess: (updated) =>
+      queryClient.setQueryData<ConversationDetail>(['conversation', conversationId], (detail) =>
+        detail && { ...detail, messages: detail.messages.map((m) => (m.id === updated.id ? updated : m)) },
+      ),
+  })
+  const button = (value: number, label: string) => (
+    <button
+      aria-pressed={message.rating === value}
+      disabled={rate.isPending}
+      onClick={() => rate.mutate(message.rating === value ? 0 : value)}
+      className={`rounded-md border px-2 py-0.5 text-xs transition-colors ${
+        message.rating === value
+          ? 'border-teal-600 bg-teal-50 text-teal-800 dark:bg-teal-950 dark:text-teal-300'
+          : 'muted border-stone-300 hover:bg-stone-100 dark:border-stone-700 dark:hover:bg-stone-800'
+      }`}
+    >
+      {label}
+    </button>
+  )
+  return (
+    <div className="flex items-center gap-2">
+      {button(1, 'Helpful')}
+      {button(-1, 'Not helpful')}
+      {rate.isError && <span className="text-xs text-red-700 dark:text-red-400">Could not save</span>}
+    </div>
+  )
+}
+
 /** An answer with its [n] markers turned into buttons that reveal the matching source. */
-function Answer({ text, sources, streaming }: { text: string; sources: Source[]; streaming?: boolean }) {
+function Answer({
+  text,
+  sources,
+  streaming,
+  footer,
+}: {
+  text: string
+  sources: Source[]
+  streaming?: boolean
+  footer?: ReactNode
+}) {
   const [active, setActive] = useState<number | null>(null)
   const [open, setOpen] = useState(false)
   const known = new Set(sources.map((s) => s.n))
@@ -83,6 +127,7 @@ function Answer({ text, sources, streaming }: { text: string; sources: Source[];
           </ol>
         </details>
       )}
+      {footer}
     </div>
   )
 }
@@ -261,7 +306,12 @@ export default function Chat() {
               message.role === 'user' ? (
                 <Question key={message.id} text={message.content} />
               ) : (
-                <Answer key={message.id} text={message.content} sources={message.citations} />
+                <Answer
+                  key={message.id}
+                  text={message.content}
+                  sources={message.citations}
+                  footer={<Rating message={message} conversationId={conversationId!} />}
+                />
               ),
             )}
             {pending && (

@@ -1,0 +1,24 @@
+{
+  "documents": [
+    {"filename": "orchard.txt", "text": "The Halden orchard grows forty varieties of apple. Harvest begins in the second week of September and lasts five weeks. Pickers are paid by the crate, and each crate holds eighteen kilograms. The cider press was installed in 1987 and still runs on its original motor."},
+    {"filename": "ferry.txt", "text": "The island ferry sails six times a day in summer and twice a day in winter. A single crossing takes forty minutes. Bicycles travel free, but cars must be booked a day ahead. The service is suspended when wind speed exceeds fifty knots."},
+    {"filename": "library.txt", "text": "Members may borrow up to twelve items for three weeks. Overdue fines were abolished in 2021. The reading room on the top floor is silent, while the ground floor allows conversation. Rare maps can be viewed by appointment only."},
+    {"filename": "kiln.txt", "text": "Stoneware is fired to 1240 degrees Celsius over eleven hours. The kiln must cool for a full day before it is opened. Glazes containing copper turn green in an oxidising atmosphere and red in a reducing one. Shelves are coated with a wash so that drips do not fuse to them."},
+    {"filename": "marathon.txt", "text": "The city marathon starts at seven in the morning at the old harbour. Water stations are placed every five kilometres. Runners who have not reached the thirty kilometre mark within four hours are asked to board the sweep bus. The course record is two hours and nine minutes."},
+    {"filename": "beekeeping.txt", "text": "A healthy hive holds around fifty thousand bees in midsummer. The queen can lay two thousand eggs a day. Honey is taken in late August, leaving at least twenty kilograms for the colony to survive the cold months. Smoke calms the bees by masking their alarm scent."}
+  ],
+  "questions": [
+    {"question": "How many kinds of apple does the orchard grow?", "expected": "forty varieties of apple"},
+    {"question": "How much does one crate weigh?", "expected": "eighteen kilograms"},
+    {"question": "How long is the boat journey to the island?", "expected": "single crossing takes forty minutes"},
+    {"question": "When is the ferry cancelled because of weather?", "expected": "wind speed exceeds fifty knots"},
+    {"question": "Do I get charged for returning books late?", "expected": "Overdue fines were abolished"},
+    {"question": "Where in the library can people talk?", "expected": "ground floor allows conversation"},
+    {"question": "What temperature is stoneware fired to?", "expected": "1240 degrees Celsius"},
+    {"question": "Why do copper glazes sometimes come out red?", "expected": "red in a reducing one"},
+    {"question": "What happens to slow runners in the race?", "expected": "sweep bus"},
+    {"question": "What is the fastest time ever run on the course?", "expected": "two hours and nine minutes"},
+    {"question": "How many eggs does the queen lay each day?", "expected": "two thousand eggs a day"},
+    {"question": "How much honey is left for the bees over winter?", "expected": "twenty kilograms for the colony"}
+  ]
+}
