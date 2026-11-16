@@ -45,3 +45,18 @@ class ApiKeyOut(BaseModel):
 
 class ApiKeyCreatedOut(ApiKeyOut):
     key: str  # shown once, never retrievable again
+
+
+class DocumentOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    filename: str
+    kind: str
+    size_bytes: int
+    status: str  # queued | processing | ready | failed
+    error: str | None
+    page_count: int | None
+    chunk_count: int | None
+    created_at: datetime
+    updated_at: datetime
