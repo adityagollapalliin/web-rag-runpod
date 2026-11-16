@@ -19,7 +19,7 @@ from sqlalchemy.pool import NullPool
 
 from app.core.config import get_settings
 from app.models import Document, DocumentStatus
-from app.services.vector_store import VectorStore
+from app.services.vector_store import build_vector_store
 from app.workers.tasks import ingest_document
 
 logger = logging.getLogger(__name__)
@@ -30,7 +30,7 @@ async def find_and_requeue() -> list[uuid.UUID]:
     settings = get_settings()
     engine = create_async_engine(settings.database_url, poolclass=NullPool)
     qdrant = AsyncQdrantClient(url=settings.qdrant_url, check_compatibility=False)
-    store = VectorStore(qdrant, settings.qdrant_collection, settings.embedding_dimension)
+    store = build_vector_store(qdrant, settings)
     requeue: list[uuid.UUID] = []
     try:
         async with async_sessionmaker(engine)() as session:

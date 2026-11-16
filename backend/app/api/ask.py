@@ -12,7 +12,7 @@ from app.api.deps import CurrentUser, SessionDep, ValkeyDep, too_many_requests
 from app.core import ratelimit
 from app.core.config import get_settings
 from app.models import Conversation, Message
-from app.schemas import AskIn, ConversationDetailOut, ConversationOut, MessageOut
+from app.schemas import AskIn, ConversationDetailOut, ConversationOut, MessageOut, RatingIn
 from app.services import answering
 from app.services.chat import Messages
 from app.workers.ingest import corpus_version_key
@@ -121,6 +121,7 @@ async def ask(
                 store=state.vector_store,
                 embedder=state.embedder,
                 reranker=state.reranker,
+                multivector_embedder=state.multivector_embedder,
                 settings=settings,
             )
             public_sources = [source.public() for source in sources]
@@ -200,3 +201,27 @@ async def delete_conversation(
 ) -> None:
     await session.delete(await _owned_conversation(session, user, conversation_id))
     await session.commit()
+
+
+@router.put("/messages/{message_id}/rating")
+async def rate_message(
+    message_id: uuid.UUID, body: RatingIn, user: CurrentUser, session: SessionDep
+) -> MessageOut:
+    """Mark an answer helpful or not. Only answers in the caller's own conversations."""
+    message = (
+        await session.execute(
+            select(Message)
+            .join(Conversation, Conversation.id == Message.conversation_id)
+            .where(
+                Message.id == message_id,
+                Message.role == "assistant",
+                Conversation.user_id == user.id,
+            )
+        )
+    ).scalar_one_or_none()
+    if message is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Answer not found")
+    message.rating = body.rating or None
+    await session.commit()
+    await session.refresh(message)
+    return MessageOut.model_validate(message)

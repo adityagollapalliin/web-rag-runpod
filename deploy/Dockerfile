@@ -65,6 +65,7 @@ RUN env -u UV_OVERRIDE -u UV_INDEX_STRATEGY \
 COPY backend/alembic.ini ./
 COPY backend/alembic ./alembic
 COPY backend/app ./app
+COPY backend/eval ./eval
 COPY --from=web /web/dist /opt/docqa/web
 
 COPY deploy/services/ /opt/docqa/services/

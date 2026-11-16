@@ -112,6 +112,7 @@ export interface Message {
   role: 'user' | 'assistant'
   content: string
   citations: Source[]
+  rating: number | null
 }
 
 export interface Conversation {

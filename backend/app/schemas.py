@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
@@ -84,8 +84,14 @@ class MessageOut(BaseModel):
     role: str
     content: str
     citations: list[dict[str, Any]]
+    rating: int | None
     created_at: datetime
 
 
 class ConversationDetailOut(ConversationOut):
     messages: list[MessageOut]
+
+
+class RatingIn(BaseModel):
+    # 1 = helpful, -1 = not helpful, 0 = clear the rating
+    rating: Literal[-1, 0, 1]

@@ -13,8 +13,9 @@ from app.core.config import Settings, get_settings
 from app.models import Document, DocumentStatus
 from app.services.chunking import chunk_pages
 from app.services.embedding import Embedder, build_embedder
+from app.services.multivector import MultiVectorEmbedder, build_multivector_embedder
 from app.services.parsing import IngestError, extract_pages
-from app.services.vector_store import VectorStore
+from app.services.vector_store import VectorStore, build_vector_store
 
 _EMBED_BATCH = 32
 
@@ -36,7 +37,11 @@ async def _embed_all(embedder: Embedder, texts: list[str]) -> list[list[float]]:
 
 
 async def _ingest(
-    session: AsyncSession, store: VectorStore, embedder: Embedder, document_id: uuid.UUID
+    session: AsyncSession,
+    store: VectorStore,
+    embedder: Embedder,
+    multivector_embedder: MultiVectorEmbedder | None,
+    document_id: uuid.UUID,
 ) -> uuid.UUID | None:
     """Returns the owner's id once the document is searchable, or None if it no longer exists."""
     settings = get_settings()
@@ -54,8 +59,15 @@ async def _ingest(
         raise IngestError("No text found (a scanned PDF needs OCR, which is not supported yet)")
     vectors = await _embed_all(embedder, [chunk.text for chunk in chunks])
 
+    multivectors = None
+    if multivector_embedder is not None:
+        multivectors = []
+        for start in range(0, len(chunks), _EMBED_BATCH):
+            batch = [chunk.text for chunk in chunks[start : start + _EMBED_BATCH]]
+            multivectors.extend(await multivector_embedder.embed(batch))
+
     await store.ensure_collection()
-    await store.replace_document(user_id, document_id, filename, chunks, vectors)
+    await store.replace_document(user_id, document_id, filename, chunks, vectors, multivectors)
 
     # The user may have deleted the document while it was being processed.
     document = await session.get(Document, document_id, populate_existing=True)
@@ -75,13 +87,16 @@ async def run_ingestion(document_id: uuid.UUID) -> None:
     qdrant = AsyncQdrantClient(url=settings.qdrant_url, check_compatibility=False)
     cache = valkey.from_url(settings.valkey_url)  # type: ignore[no-untyped-call]
     try:
-        store = VectorStore(qdrant, settings.qdrant_collection, settings.embedding_dimension)
+        store = build_vector_store(qdrant, settings)
         embedder = build_embedder(settings)
+        multivector_embedder = build_multivector_embedder(settings)
         try:
             async with async_sessionmaker(engine, expire_on_commit=False)() as session:
-                user_id = await _ingest(session, store, embedder, document_id)
+                user_id = await _ingest(session, store, embedder, multivector_embedder, document_id)
         finally:
             await embedder.aclose()
+            if multivector_embedder is not None:
+                await multivector_embedder.aclose()
         if user_id is not None:
             await cache.incr(corpus_version_key(user_id))
     finally:

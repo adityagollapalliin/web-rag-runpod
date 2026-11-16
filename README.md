@@ -3,7 +3,8 @@
 Self-hosted document question answering: upload documents, ask questions, get answers with
 citations. Built on Qdrant 1.20, FastAPI and React; runs as a single GPU pod on Runpod.
 
-Status: phases 1 to 6 of 7 done. The app has run end to end on a Runpod A40 with real models.
+Status: all 7 phases built. Phases 1 to 6 have run end to end on a Runpod A40 with real models;
+the phase 7 retrieval extensions are tested locally with stand-in models only.
 See [deploy/README.md](deploy/README.md) for how the single-container image works. See the build phases at the bottom.
 
 ## Local development (macOS)
@@ -126,6 +127,54 @@ user.
 
 Like the embedder, the reranker and chat model default to fakes on a Mac (the fake chat model
 quotes the top source). The real clients speak to vLLM: `/v1/rerank` and `/v1/chat/completions`.
+
+## Retrieval extensions
+
+Retrieval runs in stages, each of which can be switched on or off:
+
+1. **Dense search**: nearest neighbours of the question's embedding.
+2. **BM25**: keyword candidates from Qdrant's full-text index, fused with the dense ones.
+3. **Multi-vector re-scoring** (optional): a late-interaction model stores one vector per token;
+   Qdrant re-scores the fused candidates by MaxSim before returning the top 30. Set
+   `DOCQA_MULTIVECTOR_PROVIDER=http` with a model and URL. It needs a collection created with
+   multi-vectors, so also set `DOCQA_QDRANT_COLLECTION` to a new name; existing documents are
+   re-ingested into it at the next start.
+4. **Cross-encoder rerank**: the reranker scores each candidate against the question.
+5. **Relevance feedback** (optional, `DOCQA_FEEDBACK_RETRIEVAL=true`): the reranker's scores for
+   the top 5 results are sent back to Qdrant as a relevance feedback query, which searches again,
+   steered toward what scored high and away from what scored low. New candidates are reranked
+   and merged. The three weights (`DOCQA_FEEDBACK_A`, `_B`, `_C`) should be tuned for the model
+   pair with Qdrant's `qdrant-relevance-feedback` package; the defaults are the documentation's
+   example values.
+
+Stages 3 and 5 are off by default and have only been run with the stand-in models. The
+multi-vector HTTP client in particular has not been tried against a real model server.
+
+### Measuring it
+
+```bash
+cd backend
+uv run python -m app.evaluate            # eval/sample.json: 6 short documents, 12 questions
+uv run python -m app.evaluate my-set.json
+```
+
+This indexes the documents into a temporary collection with the configured models, runs each
+question through every strategy, and prints how often the passage holding the answer is ranked
+first (`hit@1`), appears in the passages given to the chat model (`hit@6`), and its mean
+reciprocal rank. With the stand-in models the numbers only prove the pipeline runs; run it on
+the pod for numbers that mean something:
+
+```bash
+# inside the pod
+cd /opt/docqa/backend && python -m app.evaluate /path/to/set.json
+```
+
+### Rating answers
+
+Each saved answer has **Helpful** and **Not helpful** buttons
+(`PUT /api/messages/{id}/rating` with `{"rating": 1 | -1 | 0}`). Ratings are stored with the
+message and its sources. They are not yet fed back into retrieval; they are the raw material
+for building a question set from real use.
 
 Tests use a separate `docqa_test` database and Valkey database 15 and a `chunks_test`
 collection, and run ingestion inline, so they never touch dev data and need no worker.

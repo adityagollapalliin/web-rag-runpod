@@ -69,6 +69,23 @@ class Settings(BaseSettings):
     answer_cache_seconds: int = 3600
     ask_rate_limit_per_minute: int = 20  # per user; each ask costs GPU time
 
+    # Second retrieval pass steered by the reranker's scores (Qdrant relevance feedback).
+    # Off by default: the three weights should be tuned per model pair with the
+    # `qdrant-relevance-feedback` package; these are the values from Qdrant's documentation.
+    feedback_retrieval: bool = False
+    feedback_examples: int = 5
+    feedback_a: float = 0.12
+    feedback_b: float = 0.43
+    feedback_c: float = 0.03
+
+    # Optional late-interaction rerank stage inside Qdrant ("none" disables it). Turning it
+    # on needs a collection created with multi-vectors: use a new DOCQA_QDRANT_COLLECTION.
+    multivector_provider: Literal["none", "fake", "http"] = "none"
+    multivector_url: str = "http://127.0.0.1:8004"
+    multivector_model: str = ""
+    multivector_dimension: int = 128
+    multivector_candidates: int = 100  # fused candidates re-scored by late interaction
+
     # Folder with the built web app (frontend/dist). Unset in development, where Vite serves it.
     static_dir: Path | None = None
 
@@ -86,9 +103,16 @@ class Settings(BaseSettings):
     def _require_real_secret_in_prod(self) -> Self:
         if self.is_prod and self.jwt_secret == DEV_JWT_SECRET:
             raise ValueError("DOCQA_JWT_SECRET must be set in prod")
-        providers = (self.embedding_provider, self.rerank_provider, self.chat_provider)
+        providers = (
+            self.embedding_provider,
+            self.rerank_provider,
+            self.chat_provider,
+            self.multivector_provider,
+        )
         if self.is_prod and "fake" in providers:
             raise ValueError("Fake model providers are not allowed in prod")
+        if self.multivector_provider == "http" and not self.multivector_model:
+            raise ValueError("DOCQA_MULTIVECTOR_MODEL must be set when the provider is http")
         if self.chat_provider == "openai" and not self.chat_model:
             raise ValueError("DOCQA_CHAT_MODEL must be set when DOCQA_CHAT_PROVIDER=openai")
         if len(self.jwt_secret) < 32:

@@ -11,8 +11,9 @@ from valkey.asyncio import Valkey
 from app.core.config import Settings
 from app.services.chat import Messages
 from app.services.embedding import Embedder
+from app.services.multivector import MultiVectorEmbedder
 from app.services.rerank import Reranker
-from app.services.vector_store import VectorStore
+from app.services.vector_store import SearchHit, VectorStore
 
 NO_RESULTS_ANSWER = (
     "I couldn't find anything in your documents about that. "
@@ -55,7 +56,15 @@ def _sha(text: str) -> str:
 def answer_cache_key(user_id: uuid.UUID, corpus_version: str, settings: Settings, q: str) -> str:
     """Changes when the user's documents change (corpus version) or the models change."""
     normalized = " ".join(q.lower().split())
-    models = _sha(f"{settings.embedding_model}|{settings.rerank_model}|{settings.chat_model}")[:12]
+    setup = (
+        settings.embedding_model,
+        settings.rerank_model,
+        settings.chat_model,
+        settings.multivector_provider,
+        settings.multivector_model,
+        settings.feedback_retrieval,
+    )
+    models = _sha("|".join(map(str, setup)))[:12]
     return f"ans:{user_id}:{corpus_version}:{models}:{_sha(normalized)}"
 
 
@@ -73,6 +82,64 @@ async def embed_query(
     return vector
 
 
+async def rank(
+    *,
+    user_id: uuid.UUID,
+    question: str,
+    vector: list[float],
+    store: VectorStore,
+    reranker: Reranker,
+    settings: Settings,
+    multivector_embedder: MultiVectorEmbedder | None = None,
+    use_text: bool = True,
+    use_rerank: bool = True,
+    use_feedback: bool = False,
+    use_multivector: bool = True,
+) -> list[tuple[float, SearchHit]]:
+    """Run the retrieval stages and return (score, hit) pairs, best first.
+
+    Stages, each optional so they can be compared: BM25 alongside dense search; late-interaction
+    re-scoring in Qdrant; cross-encoder reranking; a feedback-steered second pass.
+    """
+    query_multivector = None
+    if use_multivector and multivector_embedder is not None and store.has_multivectors:
+        query_multivector = (await multivector_embedder.embed([question]))[0]
+    hits = await store.search(
+        user_id,
+        question,
+        vector,
+        limit=settings.retrieve_limit,
+        use_text=use_text,
+        query_multivector=query_multivector,
+        candidate_limit=settings.multivector_candidates,
+    )
+    if not hits:
+        return []
+    if not use_rerank:
+        return [(hit.score, hit) for hit in hits]
+
+    scores = await reranker.rerank(question, [hit.text for hit in hits])
+    ranked = sorted(zip(scores, hits, strict=True), key=lambda pair: pair[0], reverse=True)
+
+    # Feedback needs at least two judged results that the reranker told apart.
+    judged = [(hit.point_id, score) for score, hit in ranked[: settings.feedback_examples]]
+    if use_feedback and len({score for _, score in judged}) >= 2:
+        weights = (settings.feedback_a, settings.feedback_b, settings.feedback_c)
+        more = await store.feedback_search(
+            user_id, vector, judged, weights, limit=settings.retrieve_limit
+        )
+        seen = {hit.point_id for hit in hits}
+        fresh = [hit for hit in more if hit.point_id not in seen]
+        if fresh:
+            fresh_scores = await reranker.rerank(question, [hit.text for hit in fresh])
+            ranked = sorted(
+                [*ranked, *zip(fresh_scores, fresh, strict=True)],
+                key=lambda pair: pair[0],
+                reverse=True,
+            )
+    return ranked
+
+
 async def retrieve(
     *,
     user_id: uuid.UUID,
@@ -82,14 +149,20 @@ async def retrieve(
     embedder: Embedder,
     reranker: Reranker,
     settings: Settings,
+    multivector_embedder: MultiVectorEmbedder | None = None,
 ) -> list[Source]:
     """The best few chunks for this question from this user's documents, best first."""
     vector = await embed_query(valkey, embedder, settings, question)
-    hits = await store.hybrid_search(user_id, question, vector, limit=settings.retrieve_limit)
-    if not hits:
-        return []
-    scores = await reranker.rerank(question, [hit.text for hit in hits])
-    ranked = sorted(zip(scores, hits, strict=True), key=lambda pair: pair[0], reverse=True)
+    ranked = await rank(
+        user_id=user_id,
+        question=question,
+        vector=vector,
+        store=store,
+        reranker=reranker,
+        settings=settings,
+        multivector_embedder=multivector_embedder,
+        use_feedback=settings.feedback_retrieval,
+    )
     return [
         Source(
             n=n,

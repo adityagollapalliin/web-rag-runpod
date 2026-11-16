@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import DateTime, ForeignKey, String, Text, func
+from sqlalchemy import DateTime, ForeignKey, SmallInteger, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -32,4 +32,6 @@ class Message(Base):
     content: Mapped[str] = mapped_column(Text)
     # For assistant messages: the numbered sources the answer was written from.
     citations: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, default=list)
+    # The reader's verdict on an answer: 1 helpful, -1 not helpful, null not rated.
+    rating: Mapped[int | None] = mapped_column(SmallInteger)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
