@@ -91,6 +91,7 @@ ENV PATH="/opt/docqa/venv/bin:/command:${PATH}" \
     DOCQA_RERANK_PROVIDER=http \
     DOCQA_RERANK_URL=http://127.0.0.1:8003 \
     DOCQA_RERANK_MODEL=Qwen/Qwen3-Reranker-0.6B \
+    DOCQA_RERANK_PROMPT=qwen3 \
     DOCQA_CHAT_PROVIDER=openai \
     DOCQA_CHAT_URL=http://127.0.0.1:8001 \
     DOCQA_CHAT_MODEL=Qwen/Qwen3-8B \

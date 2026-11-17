@@ -49,6 +49,19 @@ async def test_reranker_maps_scores_back_to_input_order() -> None:
     assert await reranker.rerank("q", []) == []
 
 
+async def test_reranker_wraps_pairs_in_the_qwen3_prompt() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        assert body["query"].startswith("<|im_start|>system\nJudge whether")
+        assert body["query"].endswith("<Query>: q\n")
+        assert body["documents"][0].startswith("<Document>: a<|im_end|>")
+        assert body["documents"][0].endswith("</think>\n\n")
+        return httpx.Response(200, json={"results": [{"index": 0, "relevance_score": 0.7}]})
+
+    reranker = HttpReranker("http://x", "r", prompt="qwen3", transport=_transport(handler))
+    assert await reranker.rerank("q", ["a"]) == [0.7]
+
+
 async def test_chat_model_parses_the_event_stream() -> None:
     def chunk(delta: dict[str, str]) -> str:
         return "data: " + json.dumps({"choices": [{"delta": delta}]}) + "\n\n"

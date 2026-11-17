@@ -55,6 +55,9 @@ class Settings(BaseSettings):
     rerank_provider: Literal["fake", "http"] = "fake"
     rerank_url: str = "http://127.0.0.1:8003"
     rerank_model: str = "Qwen/Qwen3-Reranker-0.6B"
+    # How the query and passages are wrapped before scoring. "qwen3" applies the prompt the
+    # Qwen3 rerankers were trained on; without it they barely separate relevant passages.
+    rerank_prompt: Literal["none", "qwen3"] = "none"
     chat_provider: Literal["fake", "openai"] = "fake"
     chat_url: str = "http://127.0.0.1:8001"
     chat_model: str = ""

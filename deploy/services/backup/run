@@ -9,8 +9,9 @@ INTERVAL="${DOCQA_BACKUP_INTERVAL_SECONDS:-120}"
 log "backing up to $BACKUPS every ${INTERVAL}s"
 
 run_backup() { s6-setuidgid docqa python /opt/docqa/backup.py "$BACKUPS" "$LOCAL/qdrant/snapshots" || log "backup failed"; }
-# A stop request gets one last backup before this service exits.
-trap 'log "stopping: final backup"; run_backup; exit 0' TERM INT
+# The final backup at shutdown is taken by start.sh, once this loop has stopped. A stop
+# signal ends the loop; a backup in progress runs in the foreground, so it finishes first.
+trap 'exit 0' TERM INT
 while true; do
   run_backup
   sleep "$INTERVAL" &
