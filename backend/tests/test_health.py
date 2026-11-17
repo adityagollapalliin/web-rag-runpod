@@ -48,3 +48,18 @@ def test_readyz_checks_model_servers_only_when_real_ones_are_configured(
     checks = response.json()["checks"]
     assert checks["chat_model"].startswith("error") and checks["postgres"] == "ok"
     assert "embedding_model" not in checks
+
+
+def test_status_reports_models_ready(client: TestClient) -> None:
+    # The stand-in models need no server, so there is nothing to wait for.
+    assert client.get("/api/status").json() == {"models_ready": True, "loading": []}
+
+
+def test_status_lists_models_that_are_still_loading(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(get_settings(), "chat_provider", "openai")
+    monkeypatch.setattr(get_settings(), "chat_url", "http://127.0.0.1:1")
+    response = client.get("/api/status")
+    assert response.status_code == 200
+    assert response.json() == {"models_ready": False, "loading": ["chat_model"]}

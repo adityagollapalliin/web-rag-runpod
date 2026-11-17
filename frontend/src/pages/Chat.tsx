@@ -3,6 +3,7 @@ import { Fragment, useEffect, useRef, useState, type FormEvent, type KeyboardEve
 import { Link, useNavigate, useParams } from 'react-router'
 import { api, ask, type Conversation, type ConversationDetail, type Message, type Source } from '../api/client'
 import { MATCH_LABEL, matchPercent, matchStrength, type MatchStrength } from '../match'
+import { describeLoading, statusPollInterval, type ModelStatus } from '../modelStatus'
 
 /** The exchange currently being streamed, shown until it is saved and reloaded. */
 interface Pending {
@@ -181,6 +182,14 @@ export default function Chat() {
     queryFn: () => api<ConversationDetail>(`/api/conversations/${conversationId}`),
     enabled: conversationId !== undefined,
   })
+  // After a server restart the models take several minutes to load; questions fail until then.
+  const modelStatus = useQuery({
+    queryKey: ['model-status'],
+    queryFn: () => api<ModelStatus>('/api/status'),
+    refetchInterval: (query) => statusPollInterval(query.state.data),
+  })
+  // If the status itself cannot be fetched, do not block asking: the answer will say what failed.
+  const modelsReady = modelStatus.data?.models_ready ?? true
   const remove = useMutation({
     mutationFn: (id: string) => api(`/api/conversations/${id}`, { method: 'DELETE' }),
     onSuccess: async (_, id) => {
@@ -207,7 +216,7 @@ export default function Chat() {
   async function send(event?: FormEvent) {
     event?.preventDefault()
     const question = draft.trim()
-    if (!question || pending?.streaming) return
+    if (!question || pending?.streaming || !modelsReady) return
     const startedIn = conversationId ?? null
     const controller = new AbortController()
     abort.current = controller
@@ -365,6 +374,18 @@ export default function Chat() {
         </div>
 
         <form onSubmit={send} className="border-t border-stone-200 bg-white p-3 dark:border-stone-800 dark:bg-stone-900">
+          {!modelsReady && (
+            <div
+              role="status"
+              className="mx-auto mb-3 flex max-w-3xl items-center gap-2 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:bg-amber-950 dark:text-amber-200"
+            >
+              <span className="inline-block h-2 w-2 shrink-0 animate-pulse rounded-full bg-amber-500" />
+              <span>
+                Models are loading: waiting for {describeLoading(modelStatus.data?.loading ?? [])}. This takes about 8
+                minutes after the server restarts; you can ask as soon as it finishes.
+              </span>
+            </div>
+          )}
           <div className="mx-auto flex max-w-3xl items-end gap-2">
             <textarea
               className="field max-h-40 min-h-10 resize-none"
@@ -376,7 +397,11 @@ export default function Chat() {
               onChange={(e) => setDraft(e.target.value)}
               onKeyDown={onKeyDown}
             />
-            <button className="btn-primary h-10 shrink-0" disabled={!draft.trim() || pending?.streaming}>
+            <button
+              className="btn-primary h-10 shrink-0"
+              disabled={!draft.trim() || pending?.streaming || !modelsReady}
+              title={modelsReady ? undefined : 'Available once the models have loaded'}
+            >
               Ask
             </button>
           </div>

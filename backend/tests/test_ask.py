@@ -238,3 +238,27 @@ def test_model_failure_is_reported_as_an_error_event(client: TestClient) -> None
     assert (
         client.get("/api/conversations", headers=bearer(token)).json() == []
     )  # nothing half-saved
+
+
+def test_unreachable_model_reports_that_models_are_starting(client: TestClient) -> None:
+    from app.api.ask import MODELS_STARTING_MESSAGE
+    from app.services.chat import OpenAIChatModel
+
+    token = signup_and_login(client, "starting@example.com")
+    upload(client, token, "plants.txt", PLANTS)
+    # Nothing listens on port 1: the same refusal as a model server that is still loading.
+    app_state = client.app.state  # type: ignore[attr-defined]
+    real_model = app_state.chat_model
+    app_state.chat_model = OpenAIChatModel("http://127.0.0.1:1", "m", 10)
+    try:
+        response = client.post(
+            "/api/ask",
+            json={"question": "What happens inside chloroplasts?"},
+            headers=bearer(token),
+        )
+    finally:
+        app_state.chat_model = real_model
+    events = [block.split("\n", 1) for block in response.text.strip().split("\n\n")]
+    name, data = events[-1]
+    assert name == "event: error"
+    assert json.loads(data.removeprefix("data: "))["message"] == MODELS_STARTING_MESSAGE
