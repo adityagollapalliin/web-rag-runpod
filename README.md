@@ -61,6 +61,9 @@ cd ../backend && DOCQA_STATIC_DIR=../frontend/dist uv run fastapi run app/main.p
 ```
 
 - **Chat**: answers stream in as they are written; `[1]`-style markers open the matching source.
+  Each source shows a match percentage: the reranker's estimate of how likely that passage
+  answers the question (green from 70%, amber from 30%, grey below). Locally, with the stand-in
+  reranker, it only counts shared words.
 - **Documents**: drag-and-drop upload with progress, live ingestion status, delete.
 - **API keys**: create (shown once), list, revoke.
 

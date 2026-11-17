@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Fragment, useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { api, ask, type Conversation, type ConversationDetail, type Message, type Source } from '../api/client'
+import { MATCH_LABEL, matchPercent, matchStrength, type MatchStrength } from '../match'
 
 /** The exchange currently being streamed, shown until it is saved and reloaded. */
 interface Pending {
@@ -17,6 +18,26 @@ function pages(source: Source): string {
   return source.page_start === source.page_end
     ? `page ${source.page_start}`
     : `pages ${source.page_start}–${source.page_end}`
+}
+
+const MATCH_STYLE: Record<MatchStrength, string> = {
+  strong: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300',
+  partial: 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300',
+  weak: 'bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-400',
+}
+
+/** How well this source matches the question, as scored by the reranker. */
+function MatchBadge({ score }: { score: number }) {
+  const percent = matchPercent(score)
+  const strength = matchStrength(percent)
+  return (
+    <span
+      title={`${MATCH_LABEL[strength]}: how likely this passage answers the question, as judged by the reranker`}
+      className={`ml-auto shrink-0 rounded px-1.5 text-xs font-semibold tabular-nums ${MATCH_STYLE[strength]}`}
+    >
+      {percent}% match
+    </span>
+  )
 }
 
 /** Helpful / Not helpful buttons for a saved answer. Clicking the active one clears it. */
@@ -103,6 +124,7 @@ function Answer({
         <details className="text-sm" open={open} onToggle={(e) => setOpen(e.currentTarget.open)}>
           <summary className="muted cursor-pointer select-none">
             {sources.length} {sources.length === 1 ? 'source' : 'sources'}
+            {` · best ${Math.max(...sources.map((s) => matchPercent(s.score)))}% match`}
           </summary>
           <ol className="mt-2 space-y-2">
             {sources.map((source) => (
@@ -117,6 +139,7 @@ function Answer({
                   </span>
                   <span className="truncate font-medium">{source.filename}</span>
                   <span className="muted shrink-0 text-xs">{pages(source)}</span>
+                  <MatchBadge score={source.score} />
                 </div>
                 <p className="muted mt-1 text-xs leading-relaxed">
                   {source.snippet}
