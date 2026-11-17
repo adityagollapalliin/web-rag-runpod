@@ -19,4 +19,30 @@ if [ -z "${DOCQA_JWT_SECRET:-}" ] && [ ! -s "$secret" ]; then
   chmod 600 "$secret" 2>/dev/null || true
 fi
 
-exec s6-svscan /opt/docqa/services
+# A stop request takes one last backup before anything shuts down. Left to itself,
+# s6-svscan signals every service at once, so PostgreSQL and Qdrant were gone before the
+# backup could reach them. So this script handles the signal: it stops the backup loop
+# (letting a backup in progress finish), backs up while the databases are still up, then
+# asks s6-svscan to stop everything.
+SERVICES=/opt/docqa/services
+LOCAL="${DOCQA_LOCAL_DIR:-/var/lib/docqa}"
+shutdown() {
+  trap '' TERM INT
+  s6-svc -wD -T 60000 -d "$SERVICES/backup" || true
+  # Skip it when the app never came up: a restore may not have finished, and backing up
+  # a half-restored database would overwrite the good copy.
+  if curl -fsS --max-time 3 http://127.0.0.1:8000/healthz >/dev/null 2>&1; then
+    echo "[shutdown] final backup"
+    s6-setuidgid docqa python /opt/docqa/backup.py \
+      "${DOCQA_DATA_DIR:-/workspace/docqa}/backups" "$LOCAL/qdrant/snapshots" \
+      || echo "[shutdown] final backup failed"
+  fi
+  s6-svscanctl -t "$SERVICES"
+  wait "$svscan" || true
+  exit 0
+}
+trap shutdown TERM INT
+
+s6-svscan "$SERVICES" &
+svscan=$!
+wait "$svscan"

@@ -3,8 +3,8 @@
 Self-hosted document question answering: upload documents, ask questions, get answers with
 citations. Built on Qdrant 1.20, FastAPI and React; runs as a single GPU pod on Runpod.
 
-Status: all 7 phases built. Phases 1 to 6 have run end to end on a Runpod A40 with real models;
-the phase 7 retrieval extensions are tested locally with stand-in models only.
+Status: all 7 phases built and run on a Runpod A40 with real models, except multi-vector
+re-scoring, which has only been tested locally with a stand-in model.
 See [deploy/README.md](deploy/README.md) for how the single-container image works. See the build phases at the bottom.
 
 ## Local development (macOS)
@@ -147,8 +147,12 @@ Retrieval runs in stages, each of which can be switched on or off:
    pair with Qdrant's `qdrant-relevance-feedback` package; the defaults are the documentation's
    example values.
 
-Stages 3 and 5 are off by default and have only been run with the stand-in models. The
-multi-vector HTTP client in particular has not been tried against a real model server.
+Stages 3 and 5 are off by default. Relevance feedback has run on the pod with the real models;
+the multi-vector HTTP client has not been tried against a real model server.
+
+The Qwen3 rerankers only rank well when each pair is wrapped in the prompt they were trained on,
+so the image sets `DOCQA_RERANK_PROMPT=qwen3`. Without it, reranking on the sample set below
+dropped hit@1 from 0.92 (dense search alone) to 0.50; with it, reranking reaches 1.00.
 
 ### Measuring it
 
@@ -165,8 +169,9 @@ reciprocal rank. With the stand-in models the numbers only prove the pipeline ru
 the pod for numbers that mean something:
 
 ```bash
-# inside the pod
-cd /opt/docqa/backend && python -m app.evaluate /path/to/set.json
+# inside the pod (settings refuse to load in prod without the JWT key, so pass it along)
+cd /opt/docqa/backend
+DOCQA_JWT_SECRET=$(cat /workspace/docqa/secrets/jwt_secret) python -m app.evaluate /path/to/set.json
 ```
 
 ### Rating answers
