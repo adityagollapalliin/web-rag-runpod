@@ -4,6 +4,7 @@ import uuid
 from collections.abc import AsyncIterator
 from typing import Any
 
+import httpx
 from fastapi import APIRouter, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select
@@ -18,6 +19,11 @@ from app.services.chat import Messages
 from app.workers.ingest import corpus_version_key
 
 logger = logging.getLogger(__name__)
+
+MODELS_STARTING_MESSAGE = (
+    "The AI models are still starting up, which takes about 8 minutes after the server "
+    "restarts. Try again in a few minutes."
+)
 router = APIRouter(prefix="/api", tags=["ask"])
 
 _HISTORY_MESSAGES = 6
@@ -146,6 +152,11 @@ async def ask(
                     ex=settings.answer_cache_seconds,
                 )
             yield _sse("done", _done(conversation_id, message_id, cached=False))
+        except httpx.ConnectError, httpx.ConnectTimeout:
+            # A model server is not accepting connections: after a pod (re)start they take
+            # several minutes to load.
+            logger.warning("A model server is unreachable; answering failed for user %s", user_id)
+            yield _sse("error", {"message": MODELS_STARTING_MESSAGE})
         except Exception:
             logger.exception("Answering failed for user %s", user_id)
             yield _sse("error", {"message": "Something went wrong while answering. Try again."})

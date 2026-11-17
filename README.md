@@ -37,6 +37,8 @@ uv run mypy app tests
 
 - `GET /healthz`: the API process is up.
 - `GET /readyz`: Postgres, Valkey and Qdrant all answer (503 otherwise).
+- `GET /api/status`: whether the model servers are up, and which are still loading. The web
+  app polls it to show a "Models are loading" banner and hold the Ask button after a restart.
 
 Configuration is by `DOCQA_*` environment variables; see `backend/.env.example`.
 
